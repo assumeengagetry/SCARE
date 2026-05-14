@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>深夜心理问卷（实验版）</title>
+  <style>
+    :root{--bg:#f7f8fa;--card:#fff;--line:#ddd;--text:#222;--muted:#666;--danger:#c70000}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,"PingFang SC",sans-serif;background:radial-gradient(circle at top,#fafbff,#eceef5);min-height:100vh;display:flex;justify-content:center;align-items:center;padding:10px;overflow:hidden}
+    .vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle,transparent 48%,#00000070 100%);z-index:4;opacity:.35}
+
+    .intro{position:fixed;inset:0;background:#000;z-index:9999;display:grid;place-items:center}
+    .intro p{color:var(--danger);letter-spacing:.35em;animation:flicker .9s infinite}
+    @keyframes flicker{0%,100%{opacity:.95}45%{opacity:.25}}
+
+    .app{width:min(700px,96vw);height:min(90vh,900px);background:#fff;border-radius:12px;box-shadow:0 2px 20px #0000001f;padding:22px;display:none;flex-direction:column;position:relative;z-index:10;overflow:hidden}
+    .title{text-align:center;font-size:clamp(22px,4vw,26px);font-weight:800;margin-bottom:10px;color:#333}
+    .progress{text-align:center;color:var(--muted);margin-bottom:14px;font-size:13px}
+    .meter{height:6px;background:#eee;border-radius:99px;overflow:hidden;margin-bottom:12px}
+    .meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#666,#111);transition:.3s}
+    .question{font-size:clamp(16px,2.8vw,19px);line-height:1.58;min-height:56px;margin-bottom:12px}
+    .options{display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1;padding-right:4px}
+    .opt{border:1px solid var(--line);border-radius:9px;padding:13px;background:#fff;cursor:pointer;transition:.2s;text-align:left}
+    .opt:hover{transform:translateY(-1px)} .opt.sel{background:#e5e5e5;border-color:#aaa}
+    .actions{display:flex;gap:10px;justify-content:space-between;margin-top:14px}
+    button{border:0;border-radius:8px;padding:11px 18px;cursor:pointer;font-size:16px}
+    .prev{background:#eee}.next{background:#444;color:#fff} button:disabled{opacity:.45;cursor:not-allowed}
+
+    .result{position:absolute;inset:0;background:#050505;color:#eee;display:none;place-items:center;text-align:center;padding:24px}
+    .result p{line-height:1.8;margin:8px 0}
+
+    .noise,.shadow-layer,.blood{position:fixed;inset:0;pointer-events:none;opacity:0;transition:.35s}
+    .noise{z-index:8;background:repeating-linear-gradient(0deg,#0000001f 0,#0000001f 1px,transparent 1px,transparent 3px)}
+    .shadow-layer{z-index:7;background:#000}
+    .blood{z-index:9;background:radial-gradient(circle at 10% 0,#7a000020 0,transparent 30%),radial-gradient(circle at 90% 10%,#7a000030 0,transparent 28%)}
+    .on{opacity:.32}
+    .flash{animation:flash .7s ease-out}
+    @keyframes flash{0%{opacity:0}35%{opacity:.33}100%{opacity:0}}
+
+    .shake{animation:shake .45s steps(2) 4}
+    @keyframes shake{25%{transform:translate(-2px,1px)}50%{transform:translate(2px,-1px)}75%{transform:translate(-1px,-2px)}}
+
+    .float{position:fixed;pointer-events:none;color:#111;opacity:.2;z-index:9998;white-space:nowrap;animation:rise 3600ms linear forwards}
+    @keyframes rise{to{transform:translateY(-95px);opacity:0}}
+    .ghost-hand{position:fixed;right:-120px;bottom:12vh;width:120px;height:220px;background:linear-gradient(180deg,#0000,#1115,#0000);filter:blur(3px);opacity:0;z-index:6;pointer-events:none}
+    .ghost-hand.show{animation:hand 2.4s ease-out}
+    @keyframes hand{0%{right:-120px;opacity:0}20%{opacity:.24}70%{right:8vw;opacity:.18}100%{right:14vw;opacity:0}}
+  </style>
+</head>
+<body>
+  <div class="intro" id="intro"><p id="introText">正在连接...</p></div>
+  <div class="vignette"></div><div class="noise" id="noise"></div><div class="shadow-layer" id="shadow"></div><div class="blood" id="blood"></div><div class="ghost-hand" id="ghostHand"></div>
+
+  <main class="app" id="app">
+    <div class="title">深夜心理调查问卷</div>
+    <div class="progress" id="progress"></div>
+    <div class="meter"><i id="meterBar"></i></div>
+    <div class="question" id="question"></div>
+    <div class="options" id="options"></div>
+    <div class="actions"><button class="prev" id="prevBtn">上一题</button><button class="next" id="nextBtn">下一题</button></div>
+    <section class="result" id="result"><div><h2>记录已完成</h2><p id="resultText"></p><p id="resultLevel"></p><button class="next" onclick="location.reload()">重新开始</button></div></section>
+  </main>
+
+<script>
+const questions=[
+['你是否经常在安静时听见来源不明的声音？',['几乎不会','偶尔会','经常发生','每天都有']],
+['当你路过镜子时，会不会不自觉多看一眼？',['不会','偶尔','会','必须看']],
+['凌晨手机亮屏时你会？',['忽略','看一眼','检查来源','立刻关机']],
+['独处时你会避免看向某个角落吗？',['不会','偶尔','会','一直会']],
+['你觉得房门背后可能有什么？',['什么也没有','可能有东西','经常怀疑','不敢确认']],
+['深夜听到脚步声，你会？',['回头确认','加快步伐','停下不动','不敢回头']],
+['你是否有过“被盯着”的感觉？',['没有','偶尔','经常','持续存在']],
+['关灯后你会马上睡着吗？',['会','有时会','很难','几乎不能']],
+['你会不会反复确认门窗锁好？',['不会','偶尔','经常','每次都要']],
+['当屏幕突然闪烁时你感觉？',['设备问题','有点不安','像在提醒我','像在回应我']],
+['你是否会在夜里突然惊醒？',['很少','偶尔','经常','几乎每天']],
+['听见自己名字被叫时你会？',['不理会','回头看','立刻紧张','马上离开']],
+['你对旧照片有什么感受？',['普通','有点怪','不舒服','强烈恐惧']],
+['如果镜中动作慢半拍，你认为？',['错觉','光线问题','解释不了','不再照镜子']],
+['夜里电梯门迟迟不关，你会？',['等它关','按关门键','马上出去','直接逃离']],
+['你是否会给背后留灯？',['不会','偶尔','经常','必须留灯']],
+['你是否觉得“第二个自己”在观察你？',['从未','偶尔会想','最近常有','一直都在']],
+['你听到过墙里类似敲击的节奏吗？',['没有','偶尔','经常','每晚都有']],
+['你敢独自看完恐怖片结尾吗？',['敢','勉强敢','不太敢','完全不敢']],
+['最后确认：你确定这里只有你一个人吗？',['确定','大概','不太确定','不确定']]
+];
+const state={i:0,answers:Array(questions.length).fill(null)};
+const $=id=>document.getElementById(id);
+const refs={app:$('app'),intro:$('intro'),introText:$('introText'),progress:$('progress'),meterBar:$('meterBar'),question:$('question'),options:$('options'),prev:$('prevBtn'),next:$('nextBtn'),noise:$('noise'),shadow:$('shadow'),blood:$('blood'),result:$('result'),resultText:$('resultText'),resultLevel:$('resultLevel'),ghostHand:$('ghostHand')};
+
+function score(){return state.answers.reduce((s,v)=>s+(v>=2?1:0),0)}
+function randomFloat(t){const pool=['别回头','你听见了吗','它在后面','别眨眼','看见你了'];const n=document.createElement('div');n.className='float';n.textContent=t||pool[Math.floor(Math.random()*pool.length)];n.style.left=`${10+Math.random()*80}vw`;n.style.top=`${12+Math.random()*72}vh`;n.style.fontSize=`${14+Math.floor(Math.random()*7)}px`;document.body.appendChild(n);setTimeout(()=>n.remove(),3500)}
+function triggerEffects(){
+  const i=state.i;
+  if(i===3||i===8||i===14) refs.app.classList.add('shake'); else refs.app.classList.remove('shake');
+  if(i>=6) refs.noise.classList.add('on'); else refs.noise.classList.remove('on');
+  if(i>=10) refs.shadow.classList.add('on'); else refs.shadow.classList.remove('on');
+  if(i>=15) refs.blood.classList.add('on'); else refs.blood.classList.remove('on');
+  if(i===12||i===18){refs.shadow.classList.remove('flash');void refs.shadow.offsetWidth;refs.shadow.classList.add('flash');}
+  if(i===9||i===17){refs.ghostHand.classList.remove('show');void refs.ghostHand.offsetWidth;refs.ghostHand.classList.add('show');}
+  if(i%2===1) randomFloat();
+}
+function render(){
+  const [q,opts]=questions[state.i];
+  refs.progress.textContent=`第 ${state.i+1} / ${questions.length} 题`;
+  refs.meterBar.style.width=`${((state.i)/ (questions.length-1))*100}%`;
+  refs.question.textContent=q; refs.options.innerHTML='';
+  opts.forEach((t,idx)=>{const b=document.createElement('button');b.className='opt'+(state.answers[state.i]===idx?' sel':'');b.textContent=t;b.onclick=()=>{state.answers[state.i]=idx;render();randomFloat()};refs.options.appendChild(b)});
+  refs.prev.disabled=state.i===0; refs.next.textContent=state.i===questions.length-1?'提交':'下一题';
+}
+function next(){if(state.answers[state.i]===null) return alert('请先选择一个选项。'); if(state.i<questions.length-1){state.i++;render();triggerEffects();return;}
+ const s=score();refs.result.style.display='grid';
+ refs.resultText.textContent=`你的敏感指数：${s}/${questions.length}`;
+ refs.resultLevel.textContent=s>=15?'极高敏感：建议暂停此类刺激内容，放松休息。':s>=10?'中高敏感：夜间减少刺激信息输入。':'状态平稳：保持规律作息即可。';
+}
+refs.prev.onclick=()=>{if(state.i>0){state.i--;render();triggerEffects();}};refs.next.onclick=next;
+const seq=['正在连接...','正在读取档案...','正在同步访客记录...','正在校准环境噪声...'];let k=0;const t=setInterval(()=>{refs.introText.textContent=seq[k++%seq.length]},420);
+setTimeout(()=>{clearInterval(t);refs.intro.remove();refs.app.style.display='flex';render();triggerEffects();},1900);
+</script>
+</body>
+</html>
