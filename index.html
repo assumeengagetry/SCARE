@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>心理测试 · 异常版</title>
+  <style>
+    :root { --bg:#f6f7fb; --card:#fff; --text:#222; --muted:#666; --danger:#c50000; }
+    *{box-sizing:border-box} body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);font-family:system-ui,sans-serif}
+    .mask{position:fixed;inset:0;background:#000;display:grid;place-items:center;z-index:99;color:#d20000;letter-spacing:.4em}
+    .app{width:min(680px,94vw);height:min(86vh,840px);background:var(--card);border-radius:14px;box-shadow:0 12px 40px #0001;padding:22px;display:none;overflow:hidden;position:relative}
+    h1{margin:0 0 8px;font-size:26px;text-align:center}.progress{text-align:center;color:var(--muted);font-size:14px}
+    .question{margin:14px 0 12px;font-size:20px;line-height:1.5}.options{display:grid;gap:10px;max-height:50vh;overflow:auto;padding-right:4px}
+    .opt{border:1px solid #d9d9d9;border-radius:10px;padding:12px 14px;cursor:pointer;background:#fff;transition:.18s}
+    .opt:hover{transform:translateY(-1px);box-shadow:0 4px 12px #0001}.opt.sel{background:#ececec;border-color:#999}
+    .nav{display:flex;gap:8px;justify-content:space-between;margin-top:12px}.btn{border:0;border-radius:8px;padding:10px 18px;cursor:pointer}.btn.main{background:#444;color:#fff}
+    .floating{position:fixed;pointer-events:none;z-index:88;color:#111;font-weight:700;opacity:.25;animation:drift 4s linear forwards}
+    @keyframes drift{from{transform:translateY(0)}to{transform:translateY(-70px);opacity:0}}
+    .glitch{animation:glitch .4s steps(2) 4}
+    @keyframes glitch{0%{transform:translate(0)}25%{transform:translate(-2px,1px)}50%{transform:translate(2px,-1px)}75%{transform:translate(-1px,-2px)}100%{transform:translate(0)}}
+    .end{position:absolute;inset:0;background:#050505;color:#f2f2f2;display:none;place-items:center;text-align:center;padding:20px}
+    .end button{margin-top:14px}
+  </style>
+</head>
+<body>
+  <div class="mask" id="mask">正在加载问卷...</div>
+  <main class="app" id="app">
+    <h1>心理健康调查问卷</h1>
+    <div class="progress" id="progress"></div>
+    <div class="question" id="q"></div>
+    <section class="options" id="opts"></section>
+    <div class="nav">
+      <button class="btn" id="prev">上一题</button>
+      <button class="btn main" id="next">下一题</button>
+    </div>
+    <section class="end" id="end">
+      <div>
+        <h2>问卷结束。</h2>
+        <p id="summary"></p>
+        <button class="btn main" onclick="location.reload()">重新开始</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const data = [
+      {q:'你最近是否感到有人在注视你？', a:['从不','偶尔','经常','一直如此']},
+      {q:'夜晚独处时，你最常听见什么？', a:['风声','脚步声','自己的心跳','有人低语']},
+      {q:'如果窗帘自己动了，你会？', a:['检查窗户','忽略它','录像','立刻离开']},
+      {q:'你是否愿意把秘密告诉“另一个你”？', a:['不愿意','看情况','可以','愿意全部告诉']},
+      {q:'当屏幕闪烁时，你会觉得...', a:['设备故障','电压不稳','被提醒了','它在回应我']}
+    ];
+
+    const state={i:0, pick:Array(data.length).fill(null), fear:0};
+    const $=id=>document.getElementById(id);
+    const q=$('q'),opts=$('opts'),prog=$('progress'),app=$('app'),mask=$('mask'),end=$('end'),summary=$('summary');
+
+    function render(){
+      const item=data[state.i];
+      prog.textContent=`第 ${state.i+1} 题 / 共 ${data.length} 题`;
+      q.textContent=item.q;
+      opts.innerHTML='';
+      item.a.forEach((t,idx)=>{
+        const b=document.createElement('button'); b.className='opt'+(state.pick[state.i]===idx?' sel':''); b.textContent=t;
+        b.onclick=()=>{state.pick[state.i]=idx; if(idx>=2) state.fear++; render(); effect();}; opts.appendChild(b);
+      });
+      $('prev').disabled=state.i===0;
+      $('next').textContent=state.i===data.length-1?'提交':'下一题';
+      if(state.i===2) app.classList.add('glitch'); else app.classList.remove('glitch');
+    }
+
+    function effect(){
+      const t=document.createElement('span'); t.className='floating'; t.textContent=['别回头','我在这','看见你了'][Math.floor(Math.random()*3)];
+      t.style.left=Math.random()*80+10+'vw'; t.style.top=Math.random()*70+15+'vh';
+      document.body.appendChild(t); setTimeout(()=>t.remove(),3800);
+    }
+
+    $('prev').onclick=()=>{if(state.i>0){state.i--;render();}};
+    $('next').onclick=()=>{
+      if(state.pick[state.i]==null) return alert('请先选择一个答案');
+      if(state.i<data.length-1){state.i++;render();}
+      else{end.style.display='grid';summary.textContent=state.fear>6?'你似乎很敏感，建议休息并远离深夜刺激内容。':'你的状态总体稳定。';}
+    };
+
+    setTimeout(()=>{mask.remove();app.style.display='block';render();},1600);
+  </script>
+</body>
+</html>
