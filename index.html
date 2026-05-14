@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>心理调查问卷</title>
+  <style>
+    :root { --bg:#f7f8fa; --card:#fff; --line:#ddd; --text:#222; --muted:#666; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,"PingFang SC",sans-serif;min-height:100vh;background:var(--bg);display:grid;place-items:center;padding:10px}
+    .terror-mask{position:fixed;inset:0;background:#000;z-index:9999;display:grid;place-items:center}
+    .terror-text{color:#d50000;letter-spacing:.35em;font-size:clamp(14px,3vw,18px);animation:flicker 1.1s infinite}
+    @keyframes flicker{0%,100%{opacity:.9}50%{opacity:.35}}
+
+    .box{width:min(620px,96vw);height:min(90vh,860px);background:var(--card);border-radius:12px;box-shadow:0 2px 15px #00000012;padding:22px;display:none;flex-direction:column;overflow:hidden;position:relative}
+    .title{text-align:center;font-size:clamp(22px,4vw,24px);font-weight:700;color:#333;margin-bottom:12px}
+    .progress{text-align:center;color:var(--muted);font-size:13px;margin-bottom:12px}
+    .question{font-size:clamp(16px,3vw,18px);line-height:1.6;margin-bottom:14px;min-height:52px}
+    .options{display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1;padding-right:4px}
+    .option{padding:13px;border:1px solid var(--line);border-radius:9px;cursor:pointer;transition:.18s;background:#fff;position:relative}
+    .option.selected{background:#e2e2e2;border-color:#aaa}
+    .option.locked{background:#f1f1f1!important;border-color:#ececec!important;color:#999!important;pointer-events:none}
+    .btn-group{display:flex;justify-content:space-between;gap:10px;margin-top:14px}
+    .btn{border:0;border-radius:8px;padding:11px 18px;cursor:pointer;font-size:16px}
+    .prev-btn{background:#eee;color:#333}.next-btn{background:#4b4b4b;color:#fff}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+
+    .float-text{position:fixed;color:#111;opacity:.2;pointer-events:none;z-index:9998;animation:floatUp 3800ms linear forwards}
+    @keyframes floatUp{to{transform:translateY(-90px);opacity:0}}
+
+    .gray-mask{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:.4s;z-index:50}
+    .gray-mask.on{opacity:.35}
+    .distort{animation:distort .45s steps(2) 4}
+    @keyframes distort{25%{transform:translate(-2px,1px)}50%{transform:translate(2px,-1px)}75%{transform:translate(-1px,-2px)}}
+
+    .result{position:absolute;inset:0;display:none;place-items:center;background:#040404;color:#f1f1f1;text-align:center;padding:24px}
+    .result p{line-height:1.7;margin-top:10px}
+  </style>
+</head>
+<body>
+  <div class="terror-mask" id="terrorMask"><div class="terror-text" id="terrorText">正在建立连接...</div></div>
+  <div class="gray-mask" id="grayMask"></div>
+
+  <div class="box" id="box">
+    <div class="title">心理调查问卷</div>
+    <div class="progress" id="progress"></div>
+    <div class="question" id="question"></div>
+    <div class="options" id="options"></div>
+    <div class="btn-group">
+      <button class="btn prev-btn" id="prevBtn">上一题</button>
+      <button class="btn next-btn" id="nextBtn">下一题</button>
+    </div>
+
+    <section class="result" id="result">
+      <div>
+        <h2>测试结束</h2>
+        <p id="resultText"></p>
+        <button class="btn next-btn" onclick="location.reload()">重新开始</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const questions = [
+      { q: '你是否经常在无人的房间里听见细微声响？', options: ['几乎没有', '偶尔会', '经常发生', '每晚都会'] },
+      { q: '如果凌晨 3 点手机亮起，你会怎么做？', options: ['直接无视', '看一眼', '反复确认来源', '立刻关机'] },
+      { q: '当镜子里的人慢了一拍，你第一反应是？', options: ['错觉', '光线问题', '录下来再看', '不再照镜子'] },
+      { q: '你是否觉得有“第二个自己”在观察你？', options: ['从未有过', '偶尔想到', '最近常有', '一直都在'] },
+      { q: '最后一个问题：你确定房间里只有你一个人吗？', options: ['确定', '大概是', '不太确定', '不确定'] }
+    ];
+
+    const state = { index: 0, answers: Array(questions.length).fill(null), score: 0 };
+    const $ = (id) => document.getElementById(id);
+    const refs = {
+      box: $('box'), progress: $('progress'), question: $('question'), options: $('options'), prevBtn: $('prevBtn'), nextBtn: $('nextBtn'),
+      terrorMask: $('terrorMask'), terrorText: $('terrorText'), grayMask: $('grayMask'), result: $('result'), resultText: $('resultText')
+    };
+
+    function renderQuestion() {
+      const item = questions[state.index];
+      refs.progress.textContent = `第 ${state.index + 1} / ${questions.length} 题`;
+      refs.question.textContent = item.q;
+      refs.options.innerHTML = '';
+
+      item.options.forEach((label, i) => {
+        const btn = document.createElement('button');
+        btn.className = `option ${state.answers[state.index] === i ? 'selected' : ''}`;
+        btn.textContent = label;
+        btn.onclick = () => handleSelect(i);
+        refs.options.appendChild(btn);
+      });
+
+      refs.prevBtn.disabled = state.index === 0;
+      refs.nextBtn.textContent = state.index === questions.length - 1 ? '提交' : '下一题';
+
+      if (state.index === 2) refs.box.classList.add('distort');
+      else refs.box.classList.remove('distort');
+
+      if (state.index >= 3) refs.grayMask.classList.add('on');
+      else refs.grayMask.classList.remove('on');
+    }
+
+    function handleSelect(i) {
+      state.answers[state.index] = i;
+      if (i >= 2) state.score += 1;
+      renderQuestion();
+      spawnFloatingText();
+    }
+
+    function spawnFloatingText() {
+      const text = ['别回头', '你听见了吗', '它在后面', '看见你了'][Math.floor(Math.random() * 4)];
+      const node = document.createElement('div');
+      node.className = 'float-text';
+      node.textContent = text;
+      node.style.left = `${Math.random() * 82 + 9}vw`;
+      node.style.top = `${Math.random() * 70 + 12}vh`;
+      node.style.fontSize = `${Math.floor(Math.random() * 8) + 14}px`;
+      document.body.appendChild(node);
+      setTimeout(() => node.remove(), 3700);
+    }
+
+    function nextStep() {
+      if (state.answers[state.index] === null) { alert('请先选择一个选项。'); return; }
+      if (state.index < questions.length - 1) {
+        state.index += 1;
+        renderQuestion();
+        return;
+      }
+      refs.result.style.display = 'grid';
+      refs.resultText.textContent = state.score >= 3
+        ? '你对环境变化非常敏感。建议减少夜间刺激内容，规律作息。'
+        : '你的整体状态较稳定。保持规律休息即可。';
+    }
+
+    refs.prevBtn.onclick = () => { if (state.index > 0) { state.index -= 1; renderQuestion(); } };
+    refs.nextBtn.onclick = nextStep;
+
+    const loaderText = ['正在建立连接...', '正在读取档案...', '正在同步访客记录...'];
+    let p = 0;
+    const timer = setInterval(() => { refs.terrorText.textContent = loaderText[p++ % loaderText.length]; }, 500);
+
+    setTimeout(() => {
+      clearInterval(timer);
+      refs.terrorMask.remove();
+      refs.box.style.display = 'flex';
+      renderQuestion();
+    }, 1800);
+  </script>
+</body>
+</html>
